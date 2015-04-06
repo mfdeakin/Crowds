@@ -47,6 +47,12 @@ class TimeToGoal(Goal):
         dv = ped.vel
         dp = self.pos - ped.pos
         dvMag = np.sqrt(np.dot(dv, dv))
+        if dvMag == 0:
+            minDist = np.sqrt(np.dot(dp, dp))
+            # The pedestrian is already at the minimum distance,
+            # so it doesn't make sense to have a force associated
+            # with the time to reach it
+            return (minDist, 0)
         dvDir = dv / dvMag
         ptMinDist = np.dot(dvDir, dp)
         minDistTime = ptMinDist / dvMag
@@ -58,7 +64,7 @@ class TimeToGoal(Goal):
         minDist, minDistTime = self.calcTimeToMinDist(ped)
         dp = self.pos - ped.pos
         dpDir = dp / np.sqrt(np.dot(dp, dp))
-        f = minDist * minDistTime
+        f = minDist + minDistTime
         force = dpDir * f
         return force
 

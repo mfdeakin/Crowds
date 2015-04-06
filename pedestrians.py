@@ -27,30 +27,39 @@ class Pedestrian:
         return np.array([0.0, 0.0])
     
     def update(self, others, dt = 0.1):
-        dv = np.array([0.0, 0.0])
-        for p in others:
-            force = self.calcForce(p)
-            print()
-            print(self)
-            print(p)
-            print(force)
-            dv += force * dt
-        dv += self.goal.calcForceToPed(self) * dt
-        self.vel += dv
-        self.pos += self.vel * dt
-        return dv
+        return np.array([0.0, 0.0])
     
     def pedType(self):
         return "Static Pedestrian"
 
 class PedestrianGoal(Pedestrian):
-    def __init__(self, goal, **kwds):
+    def __init__(self, goal, color, maxVelMag = 0.1, **kwds):
         super().__init__(**kwds)
         self.goal = goal
+        self.maxVelMag = maxVelMag
+        self.color = color
 
     def __repr__(self):
         return super().__repr__() + \
             "\n" + str(self.goal)
+    
+    def update(self, others, dt = 0.1):
+        dv = np.array([0.0, 0.0])
+        for p in others:
+            force = self.calcForce(p)
+            dv += force * dt
+        print()
+        print(self)
+        print("Force: " + str(self.goal.calcForceToPed(self)))
+        dv += self.goal.calcForceToPed(self) * dt
+        self.vel = self.vel + dv
+        velMag = np.dot(self.vel, self.vel)
+        if velMag > self.maxVelMag ** 2:
+            self.vel = self.vel / np.sqrt(velMag) * self.maxVelMag
+        print("New Velocity: " + str(self.vel) + "; added " + \
+              str(dv) + " to " + str(self.vel - dv))
+        self.pos += self.vel * dt
+        return dv
 
 class PedestrianInvDistance(PedestrianGoal):
     """A pedestrian based off of the inverse square distance model"""
@@ -99,7 +108,7 @@ class PedestrianTTC(PedestrianGoal):
     
     def calcForce(self, other):
         ttc = self.calcTimeToCollision(other)
-        if isinf(ttc):
+        if isinf(ttc) or ttc < 0:
             return np.array([0.0, 0.0])
         dp = other.pos - self.pos
         dv = other.vel - self.vel
@@ -112,6 +121,7 @@ class PedestrianTTC(PedestrianGoal):
         fterm3num = (dvMag ** 2) * dp - dpdv * dv
         fterm3den = dpdv ** 2 - (dvMag ** 2) * (dpMag ** 2 - totalRad ** 2)
         force = -fterm1 * fterm2 * (dv - fterm3num / sqrt(fterm3den))
+        #print("Adding force from other: " + str(force) + ", TTC: " + str(ttc))
         return force
     
     def pedType(self):
