@@ -6,7 +6,7 @@ from math import *
 
 import numpy as np
 import random
-import cairo
+from PIL import Image, ImageDraw, ImageColor
 
 class CrowdSim:
     """A pedestrian interface for different energy based motion planners"""
@@ -18,14 +18,18 @@ class CrowdSim:
         self.wallDist = 0.001
         self.pedRadius = pedRadius
         for i in range(numPedestrians):
-            xGoal = random.random() * areaDim[0]
-            yGoal = random.random() * areaDim[1]
+            xGoal = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                    pedRadius
+            yGoal = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                    pedRadius
             goal = TimeToGoal(pos = [xGoal, yGoal])
             xPed = random.random() * areaDim[0]
             yPed = random.random() * areaDim[1]
-            self.pedestrians.append(PedestrianTTC(pos = [xPed, yPed],
-                                                  radius = pedRadius,
-                                                  goal = goal))
+            p = PedestrianTTC(pos = [xPed, yPed],
+                              radius = pedRadius,
+                              goal = goal)
+            self.pedestrians.append(p)
+            print(p)
         for c1 in [np.array([0.0, 0.0]),
                    np.array([areaDim[0], areaDim[1]])]:
             for c2 in [np.array([areaDim[0], 0.0]),
@@ -51,20 +55,16 @@ class CrowdSim:
             wallPed = Pedestrian(pos = pos)
             self.walls.append(wallPed)
     
-    def renderScene(self, context):
-        context.set_source_rgb(1.0, 1.0, 1.0)
-        context.rectangle(0, 0, 1.0, 1.0)
-        context.fill()
-        context.set_source_rgb(0.0, 0.0, 0.0)
-        for w in self.walls:
-            context.rectangle(w.pos[0] - self.wallDist / 2,
-                              w.pos[1] - self.wallDist / 2,
-                              w.pos[0] + self.wallDist / 2,
-                              w.pos[1] + self.wallDist / 2)
-            context.fill()
-        context.set_source_rgb(1.0, 0.0, 0.0)
+    def renderScene(self, im, width, height):
+        draw = ImageDraw.ImageDraw(im)
+        draw.setink("#000000")
         for p in self.pedestrians:
-            context.arc(p.pos[0], p.pos[1], self.pedRadius, 0, 2 * pi)
+            topLeft = p.pos - np.array([p.radius, p.radius])
+            botRight = p.pos - np.array([-p.radius, -p.radius])
+            bounds = (topLeft[0] * width, topLeft[1] * height,
+                      botRight[0] * width, botRight[1] * height)
+            draw.ellipse(bounds, fill = (255, 0, 0))
+            draw.ellipse(bounds)
     
     def timestep(self):
         for i in range(len(self.pedestrians)):
@@ -72,28 +72,22 @@ class CrowdSim:
                         self.walls
             self.pedestrians[i].update(otherPeds)
 
-def createCairoImg(xMax, yMax):
-    imScale = 32
-    imXDim = imScale * xMax
-    imYDim = imScale * yMax
-    rmBmp = np.zeros((imXDim, imYDim, 4), dtype=np.uint8)
-    rmSurf = cairo.ImageSurface.create_for_data(rmBmp,
-                                                cairo.FORMAT_ARGB32,
-                                                imXDim, imYDim)
-    rmCtx = cairo.Context(rmSurf)
-    rmCtx.set_source_rgb(1.0, 1.0, 1.0)
-    rmCtx.translate(0, imYDim)
-    rmCtx.scale(imScale, -imScale)
-    rmCtx.paint()
-    rmCtx.set_line_width(0.1)
-    return (rmSurf, rmCtx)
+def createImage(width, height):
+    imBytes = np.zeros((width, height, 3))
+    im = Image.frombytes(size = (width, height),
+                             data = imBytes, mode = "RGB")
+    ImageDraw.floodfill(im, (0, 0), (255, 255, 255))
+    return im
 
 if __name__ == "__main__":
     c = CrowdSim()
     print(c)
+    imWidth = 512
+    imHeight = 512
     for t in np.linspace(0.0, 10.0, 100):
-        surface, context = createCairoImg(256, 256)
+        im = createImage(imWidth, imHeight)
+        c.renderScene(im, imWidth, imHeight)
         c.timestep()
-        c.render(context)
+        im.save("Time_" + str(t) + "s.png", 'PNG')
         print(c)
     
