@@ -23,13 +23,15 @@ class CrowdSim:
             yGoal = random.random() * (areaDim[1] - 2 * pedRadius) + \
                     pedRadius
             goal = TimeToGoal(pos = [xGoal, yGoal])
-            xPed = random.random() * areaDim[0]
-            yPed = random.random() * areaDim[1]
+            xPed = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                   pedRadius
+            yPed = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                   pedRadius
+            print(xPed, yPed, pedRadius)
             p = PedestrianTTC(pos = [xPed, yPed],
                               radius = pedRadius,
                               goal = goal)
             self.pedestrians.append(p)
-            print(p)
         for c1 in [np.array([0.0, 0.0]),
                    np.array([areaDim[0], areaDim[1]])]:
             for c2 in [np.array([areaDim[0], 0.0]),
@@ -84,7 +86,7 @@ if __name__ == "__main__":
     print(c)
     imWidth = 512
     imHeight = 512
-    for t in np.linspace(0.0, 10.0, 100):
+    for t in np.linspace(0.0, 10.0, 101):
         im = createImage(imWidth, imHeight)
         c.renderScene(im, imWidth, imHeight)
         c.timestep()

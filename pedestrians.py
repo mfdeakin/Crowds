@@ -18,8 +18,7 @@ class Pedestrian:
         return self.pedType() + "\n" + \
             "Position: " + str(self.pos) + \
             "\nVelocity: " + str(self.vel) + \
-            "\nRadius: " + str(self.radius) + \
-            "\nGoal: " + str(self.goal)
+            "\nRadius: " + str(self.radius)
     
     def __str__(self):
         return self.__repr__()
@@ -31,6 +30,10 @@ class Pedestrian:
         dv = np.array([0.0, 0.0])
         for p in others:
             force = self.calcForce(p)
+            print()
+            print(self)
+            print(p)
+            print(force)
             dv += force * dt
         dv += self.goal.calcForceToPed(self) * dt
         self.vel += dv
@@ -44,6 +47,10 @@ class PedestrianGoal(Pedestrian):
     def __init__(self, goal, **kwds):
         super().__init__(**kwds)
         self.goal = goal
+
+    def __repr__(self):
+        return super().__repr__() + \
+            "\n" + str(self.goal)
 
 class PedestrianInvDistance(PedestrianGoal):
     """A pedestrian based off of the inverse square distance model"""
