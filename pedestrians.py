@@ -7,42 +7,68 @@ import numpy as np
 class Pedestrian:
     """A pedestrian interface for different energy based motion planners"""
     
-    def __init__(self, pos, vel = np.array([0, 0]), radius = 1.0, **kwds):
+    def __init__(self, pos, vel = np.array([0, 0]),
+                 radius = 1.0, **kwds):
         super().__init__(**kwds)
         self.pos = np.array(pos)
         self.vel = np.array(vel)
         self.radius = radius
     
     def __repr__(self):
-        return "Position: " + str(self.pos) + \
+        return self.pedType() + "\n" + \
+            "Position: " + str(self.pos) + \
             "\nVelocity: " + str(self.vel) + \
-            "\nRadius: " + str(self.radius)
+            "\nRadius: " + str(self.radius) + \
+            "\nGoal: " + str(self.goal)
     
     def __str__(self):
         return self.__repr__()
     
     def calcForce(self, other):
+        return np.array([0.0, 0.0])
+    
+    def update(self, others, dt = 0.1):
+        dv = np.array([0.0, 0.0])
+        for p in others:
+            force = self.calcForce(p)
+            dv += force * dt
+        dv += self.goal.calcForceToPed(self) * dt
+        self.vel += dv
+        self.pos += self.vel * dt
+        return dv
+    
+    def pedType(self):
+        return "Static Pedestrian"
+
+class PedestrianGoal(Pedestrian):
+    def __init__(self, goal, **kwds):
+        super().__init__(**kwds)
+        self.goal = goal
+
+class PedestrianInvDistance(PedestrianGoal):
+    """A pedestrian based off of the inverse square distance model"""
+    dist_const = 1
+    
+    def __init__(self, dist_const, **kwds):
+        self.dist_const = dist_const
+        super().__init__(kwds)
+    
+    def calcForce(self, other):
         dp = self.pos - other.pos
-        magnitude = 1 / np.dot(dp, dp)
+        magnitude = self.dist_const / np.dot(dp, dp)
         direction = dp * sqrt(magnitude)
         return magnitude * direction
     
-    def update(self, others, dt = 0.1):
-        for p in others:
-            force = self.calcForce(p)
-            self.vel += force * dt
-        self.pos += self.vel * dt
+    def pedType(self):
+        return "Inverse Distance Pedestrian"
 
-class PedestrianTTC(Pedestrian):
+class PedestrianTTC(PedestrianGoal):
     """A pedestrian based off of the time to collision model"""
     k_const = 1
     tau0 = 3
     
     def __init__(self, **kwds):
         super().__init__(**kwds)
-    
-    def __repr__(self):
-        return super().__repr__() + "\nk: " + str(self.k_const)
     
     def calcTimeToCollision(self, other):
         dv = other.vel - self.vel
@@ -80,8 +106,11 @@ class PedestrianTTC(Pedestrian):
         fterm3den = dpdv ** 2 - (dvMag ** 2) * (dpMag ** 2 - totalRad ** 2)
         force = -fterm1 * fterm2 * (dv - fterm3num / sqrt(fterm3den))
         return force
+    
+    def pedType(self):
+        return "Time To Collision Pedestrian"
 
-class PedestrianDS(Pedestrian):
+class PedestrianDS(PedestrianGoal):
     safeDist = 3
     springConst = 1
     dampConst = 1
@@ -95,3 +124,6 @@ class PedestrianDS(Pedestrian):
         dvMag = sqrt(np.dot(dv, dv))
         force = springConst * dp / dpMag + dampConst * dv / dvMag
         return force
+    
+    def pedType(self):
+        return "Damped Spring Pedestrian"
