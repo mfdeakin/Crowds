@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-from math import sqrt, pi, exp, isinf
+from math import pi, exp, isinf, copysign
 from copy import deepcopy
 import numpy as np
 
@@ -27,8 +27,29 @@ class Pedestrian:
         return np.array([0.0, 0.0])
     
     def calcWallForce(self, wall):
-        print("Wall:", wall)
-        return np.array([0.0, 0.0])
+        dx = wall[0][0] - wall[1][0]
+        dy = wall[0][1] - wall[1][1]
+        perpVec = np.array([dy, -dx])
+        end1 = wall[0] - self.pos
+        end2 = wall[1] - self.pos
+        sign1 = copysign(1, np.cross(perpVec, end1))
+        sign2 = copysign(1, np.cross(perpVec, end2))
+        force = np.array([0.0, 0.0])
+        if sign1 != sign2:
+            # The perpendicular from the wall to the pedestrian exists
+            # So, compute the perpendicular distance
+            pMag = np.sqrt(np.dot(perpVec, perpVec))
+            dist = np.dot(perpVec, end1) / pMag
+            force = perpVec / dist ** 3
+        else:
+            # Compute the closest wall end point,
+            # and treat it as a pedestrian of 0 radius
+            closest = wall[0]
+            if np.dot(end1, end1) > np.dot(end2, end2):
+                closest = wall[1]
+            ped = Pedestrian(closest)
+            force = self.calcPedForce(ped)
+        return force
     
     def update(self, others, walls, dt = 0.1):
         return np.array([0.0, 0.0])
@@ -87,7 +108,7 @@ class PedestrianInvDistance(PedestrianGoal):
     def calcPedForce(self, other):
         dp = self.pos - other.pos
         magnitude = self.dist_const / np.dot(dp, dp)
-        direction = dp * sqrt(magnitude)
+        direction = dp * np.sqrt(magnitude)
         return magnitude * direction
     
     def calcWallForce(self, wall):
@@ -106,9 +127,9 @@ class PedestrianTTC(PedestrianGoal):
     
     def calcTimeToCollision(self, other):
         dv = other.vel - self.vel
-        dvMag = sqrt(np.dot(dv, dv))
+        dvMag = np.sqrt(np.dot(dv, dv))
         dp = other.pos - self.pos
-        dpMag = sqrt(np.dot(dp, dp))
+        dpMag = np.sqrt(np.dot(dp, dp))
         a = dvMag * dvMag
         b = -np.dot(dp, dv)
         c = dpMag * dpMag - (self.radius + other.radius) ** 2
@@ -116,7 +137,7 @@ class PedestrianTTC(PedestrianGoal):
         if a == 0 or d < 0:
             return float('inf')
         else:
-            ttc = (b - sqrt(d)) / a
+            ttc = (b - np.sqrt(d)) / a
             return ttc
     
     def calcEnergy(self, other):
@@ -130,15 +151,15 @@ class PedestrianTTC(PedestrianGoal):
             return np.array([0.0, 0.0])
         dp = other.pos - self.pos
         dv = other.vel - self.vel
-        dpMag = sqrt(np.dot(dp, dp))
-        dvMag = sqrt(np.dot(dv, dv))
+        dpMag = np.sqrt(np.dot(dp, dp))
+        dvMag = np.sqrt(np.dot(dv, dv))
         dpdv = np.dot(dp, dv)
         totalRad = self.radius + other.radius
         fterm1 = -self.k_const * exp(-ttc / self.tau0) / ((dpMag * ttc)  ** 2)
         fterm2 = 2 / ttc + 1 / self.tau0
         fterm3num = (dvMag ** 2) * dp - dpdv * dv
         fterm3den = dpdv ** 2 - (dvMag ** 2) * (dpMag ** 2 - totalRad ** 2)
-        force = -fterm1 * fterm2 * (dv - fterm3num / sqrt(fterm3den))
+        force = -fterm1 * fterm2 * (dv - fterm3num / np.sqrt(fterm3den))
         return force
     
     def pedType(self):

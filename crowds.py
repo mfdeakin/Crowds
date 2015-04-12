@@ -109,7 +109,6 @@ class CrowdSim:
             wt = tuple(tuple(w[i][j] * scaling[j]
                              for j in range(len(w[i])))
                        for i in range(len(w)))
-            print("Wall:", wt)
             draw.line(wt, width = 2)
         return self
     
