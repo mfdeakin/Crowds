@@ -121,25 +121,29 @@ class PedestrianTTC(PedestrianGoal):
         fterm3num = (dvMag ** 2) * dp - dpdv * dv
         fterm3den = dpdv ** 2 - (dvMag ** 2) * (dpMag ** 2 - totalRad ** 2)
         force = -fterm1 * fterm2 * (dv - fterm3num / sqrt(fterm3den))
-        #print("Adding force from other: " + str(force) + ", TTC: " + str(ttc))
         return force
     
     def pedType(self):
         return "Time To Collision Pedestrian"
 
 class PedestrianDS(PedestrianGoal):
-    safeDist = 3
-    springConst = 1
-    dampConst = 1
+    def __init__(self, safeDist = 0.2, springConst = 1,
+                 dampConst = 1, **kwds):
+        super().__init__(**kwds)
+        self.safeDist = safeDist
+        self.springConst = springConst
+        self.dampConst = dampConst
     
     def calcForce(self, other):
-        dp = other.pos - self.pos
-        dpMag = sqrt(np.dot(dp, dp))
+        dp = self.pos - other.pos
+        dpMag = np.sqrt(np.dot(dp, dp))
         if dpMag > safeDist:
             return 0
-        dv = other.vel - self.vel
-        dvMag = sqrt(np.dot(dv, dv))
-        force = springConst * dp / dpMag + dampConst * dv / dvMag
+        dv = self.vel - other.vel
+        dpDir = dp / dpMag
+        compSpeed = np.dot(dv, dpDir)
+        compression = safeDist - dpMag
+        force = (springConst * compression - dampConst * compSpeed) * dpDir
         return force
     
     def pedType(self):
