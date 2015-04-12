@@ -23,10 +23,14 @@ class Pedestrian:
     def __str__(self):
         return self.__repr__()
     
-    def calcForce(self, other):
+    def calcPedForce(self, other):
         return np.array([0.0, 0.0])
     
-    def update(self, others, dt = 0.1):
+    def calcWallForce(self, wall):
+        print("Wall:", wall)
+        return np.array([0.0, 0.0])
+    
+    def update(self, others, walls, dt = 0.1):
         return np.array([0.0, 0.0])
     
     def pedType(self):
@@ -43,10 +47,13 @@ class PedestrianGoal(Pedestrian):
         return super().__repr__() + \
             "\n" + str(self.goal)
     
-    def update(self, others, dt = 0.1):
+    def update(self, others, walls, dt = 0.1):
         dv = np.array([0.0, 0.0])
         for p in others:
-            force = self.calcForce(p)
+            force = self.calcPedForce(p)
+            dv += force * dt
+        for w in walls:
+            force = self.calcWallForce(w)
             dv += force * dt
         print()
         print(self)
@@ -69,11 +76,14 @@ class PedestrianInvDistance(PedestrianGoal):
         self.dist_const = dist_const
         super().__init__(kwds)
     
-    def calcForce(self, other):
+    def calcPedForce(self, other):
         dp = self.pos - other.pos
         magnitude = self.dist_const / np.dot(dp, dp)
         direction = dp * sqrt(magnitude)
         return magnitude * direction
+    
+    def calcWallForce(self, wall):
+        return None
     
     def pedType(self):
         return "Inverse Distance Pedestrian"
