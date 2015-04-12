@@ -47,24 +47,32 @@ class PedestrianGoal(Pedestrian):
         return super().__repr__() + \
             "\n" + str(self.goal)
     
-    def update(self, others, walls, dt = 0.1):
-        dv = np.array([0.0, 0.0])
+    def velForce(self):
+        vMag = np.sqrt(np.dot(self.vel, self.vel))
+        coeff = vMag / 2 / self.maxVelMag
+        velForce = -coeff * self.vel
+        return velForce
+    
+    def calcForces(self, others, walls):
+        force = np.array([0.0, 0.0])
         for p in others:
-            force = self.calcPedForce(p)
-            dv += force * dt
+            force += self.calcPedForce(p)
         for w in walls:
-            force = self.calcWallForce(w)
-            dv += force * dt
-        print()
-        print(self)
-        print("Force: " + str(self.goal.calcForceToPed(self)))
-        dv += self.goal.calcForceToPed(self) * dt
+            force += self.calcWallForce(w)
+        force += self.velForce()
+        force += self.goal.calcForceToPed(self)
+        return force
+    
+    def update(self, others, walls, dt = 0.1):
+        force = self.calcForces(others, walls)
+        dv = force * dt
+        # Update the velocity
         self.vel = self.vel + dv
+        # Impose a hard limit on the velocity
         velMag = np.dot(self.vel, self.vel)
         if velMag > self.maxVelMag ** 2:
             self.vel = self.vel / np.sqrt(velMag) * self.maxVelMag
-        print("New Velocity: " + str(self.vel) + "; added " + \
-              str(dv) + " to " + str(self.vel - dv))
+        # Update the position
         self.pos += self.vel * dt
         return dv
 
@@ -116,7 +124,7 @@ class PedestrianTTC(PedestrianGoal):
         e = self.k_const * exp(-ttc / self.tau0) / ttc ** 2
         return e
     
-    def calcForce(self, other):
+    def calcPedForce(self, other):
         ttc = self.calcTimeToCollision(other)
         if isinf(ttc) or ttc < 0:
             return np.array([0.0, 0.0])
@@ -144,7 +152,7 @@ class PedestrianDS(PedestrianGoal):
         self.springConst = springConst
         self.dampConst = dampConst
     
-    def calcForce(self, other):
+    def calcPedForce(self, other):
         dp = self.pos - other.pos
         dpMag = np.sqrt(np.dot(dp, dp))
         if dpMag > safeDist:

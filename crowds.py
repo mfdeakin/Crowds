@@ -42,7 +42,8 @@ class CrowdSim:
                    np.array([areaDim[0], areaDim[1]])]:
             for c2 in [np.array([areaDim[0], 0.0]),
                        np.array([0.0, areaDim[1]])]:
-                self.createWall(c1, c2)
+                self.walls.append((c1, c2))
+        print(self.walls)
     
     def __repr__(self):
         strout = "Number of Pedestrians: " + \
@@ -54,18 +55,17 @@ class CrowdSim:
     def __str__(self):
         return self.__repr__()
     
-    def createWall(self, start, end):
-        ds = end - start
-        dsMag = sqrt(np.dot(ds, ds))
-        numPts = int(dsMag / self.wallDist)
-        for i in range(numPts):
-            pos = start + ds / numPts * i
-            wallPed = Pedestrian(pos = pos, radius = 0.0)
-            self.walls.append(wallPed)
-    
     def renderScene(self, im, width, height):
         draw = ImageDraw.ImageDraw(im)
         draw.setink("#000000")
+        for p in self.pedestrians:
+            # Draw the pedestrian's goal
+            goalTopLeft = p.goal.pos - np.array([p.radius, p.radius])
+            goalBotRight = p.goal.pos - np.array([-p.radius, -p.radius])
+            gBounds = (goalTopLeft[0] * width, goalTopLeft[1] * height,
+                       goalBotRight[0] * width, goalBotRight[1] * height)
+            draw.rectangle(gBounds, fill = p.color)
+        
         for p in self.pedestrians:
             # Draw the pedestrian
             eTopLeft = p.pos - np.array([p.radius, p.radius])
@@ -74,20 +74,49 @@ class CrowdSim:
                        eBotRight[0] * width, eBotRight[1] * height)
             draw.ellipse(eBounds, fill = p.color)
             draw.ellipse(eBounds)
-            
-            # Draw the pedestrians velocity
+        
+        for i in range(len(self.pedestrians)):
+            p = self.pedestrians[i]
+            # Draw the pedestrian's velocity
             xBounds = [p.pos[0] * width,
                        (p.pos[0] + p.vel[0]) * width]
             yBounds = [p.pos[1] * height,
                        (p.pos[1] + p.vel[1]) * height]
             aBounds = tuple(zip(xBounds, yBounds))
             draw.line(aBounds, width = 1)
+            
+            # Draw the force from the goal
+            gForce = p.goal.calcForceToPed(p)
+            xBounds = [p.pos[0] * width,
+                       (p.pos[0] + gForce[0]) * width]
+            yBounds = [p.pos[1] * height,
+                       (p.pos[1] + gForce[1]) * height]
+            gfBounds = tuple(zip(xBounds, yBounds))
+            draw.line(gfBounds, fill = p.color, width = 4)
+            
+            # Draw the total force acting on the pedestrian
+            otherPeds = self.pedestrians[:i] + self.pedestrians[i + 1:]
+            force = p.calcForces(otherPeds, self.walls)
+            xBounds = [p.pos[0] * width,
+                       (p.pos[0] + force[0]) * width]
+            yBounds = [p.pos[1] * height,
+                       (p.pos[1] + force[1]) * height]
+            fBounds = tuple(zip(xBounds, yBounds))
+            draw.line(fBounds, width = 2)
+        
+        scaling = [width, height]
+        for w in self.walls:
+            wt = tuple(tuple(w[i][j] * scaling[j]
+                             for j in range(len(w[i])))
+                       for i in range(len(w)))
+            print("Wall:", wt)
+            draw.line(wt, width = 2)
+        return self
     
     def timestep(self):
         for i in range(len(self.pedestrians)):
-            otherPeds = self.pedestrians[:i] + self.pedestrians[i + 1:] +\
-                        self.walls
-            self.pedestrians[i].update(otherPeds)
+            otherPeds = self.pedestrians[:i] + self.pedestrians[i + 1:]
+            self.pedestrians[i].update(otherPeds, self.walls)
 
 def createImage(width, height):
     imBytes = np.zeros((width, height, 3))
@@ -101,10 +130,13 @@ if __name__ == "__main__":
     print(c)
     imWidth = 512
     imHeight = 512
+    frame = 0
     for t in np.linspace(0.0, 10.0, 101):
         im = createImage(imWidth, imHeight)
         c.renderScene(im, imWidth, imHeight)
         c.timestep()
-        im.save("Time_" + str(t) + "s.png", 'PNG')
+        fname = "Frame_" + format(frame, "03") + ".png"
+        frame += 1
+        im.save(fname)
         print(c)
     

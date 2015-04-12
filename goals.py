@@ -37,7 +37,9 @@ class DistanceGoal(Goal):
         return force
 
 class TimeToGoal(Goal):
-    def __init__(self, **kwds):
+    def __init__(self, distCoeff = 1.0, timeCoeff = 0.1, **kwds):
+        self.distCoeff = distCoeff
+        self.timeCoeff = timeCoeff
         super().__init__(**kwds)
     
     def goalType(self):
@@ -64,7 +66,10 @@ class TimeToGoal(Goal):
         minDist, minDistTime = self.calcTimeToMinDist(ped)
         dp = self.pos - ped.pos
         dpDir = dp / np.sqrt(np.dot(dp, dp))
-        f = minDist + minDistTime
+        if minDistTime < 0:
+            minDistTime *= -2
+        f = self.distCoeff * minDist + \
+            self.timeCoeff * minDistTime
         force = dpDir * f
         return force
 
