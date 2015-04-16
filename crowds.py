@@ -32,11 +32,12 @@ class CrowdSim:
                    pedRadius
             print(xPed, yPed, pedRadius)
             color = colors[i % numPedestrians]
-            p = PedestrianTTC(pos = [xPed, yPed],
-                              radius = pedRadius,
-                              goal = goal,
-                              maxVelMag = maxVelMag,
-                              color = color)
+            p = PedestrianInvDistance(pos = [xPed, yPed],
+                                      radius = pedRadius,
+                                      goal = goal,
+                                      dist_const = 0.01,
+                                      maxVelMag = maxVelMag,
+                                      color = color)
             self.pedestrians.append(p)
         for c1 in [np.array([0.0, 0.0]),
                    np.array([areaDim[0], areaDim[1]])]:

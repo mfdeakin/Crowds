@@ -27,29 +27,7 @@ class Pedestrian:
         return np.array([0.0, 0.0])
     
     def calcWallForce(self, wall):
-        dx = wall[0][0] - wall[1][0]
-        dy = wall[0][1] - wall[1][1]
-        perpVec = np.array([dy, -dx])
-        end1 = wall[0] - self.pos
-        end2 = wall[1] - self.pos
-        sign1 = copysign(1, np.cross(perpVec, end1))
-        sign2 = copysign(1, np.cross(perpVec, end2))
-        force = np.array([0.0, 0.0])
-        if sign1 != sign2:
-            # The perpendicular from the wall to the pedestrian exists
-            # So, compute the perpendicular distance
-            pMag = np.sqrt(np.dot(perpVec, perpVec))
-            dist = np.dot(perpVec, end1) / pMag
-            force = perpVec / dist ** 3
-        else:
-            # Compute the closest wall end point,
-            # and treat it as a pedestrian of 0 radius
-            closest = wall[0]
-            if np.dot(end1, end1) > np.dot(end2, end2):
-                closest = wall[1]
-            ped = Pedestrian(closest)
-            force = self.calcPedForce(ped)
-        return force
+        return np.array([0.0, 0.0])
     
     def update(self, others, walls, dt = 0.1):
         return np.array([0.0, 0.0])
@@ -103,7 +81,7 @@ class PedestrianInvDistance(PedestrianGoal):
     
     def __init__(self, dist_const, **kwds):
         self.dist_const = dist_const
-        super().__init__(kwds)
+        super().__init__(**kwds)
     
     def calcPedForce(self, other):
         dp = self.pos - other.pos
@@ -112,7 +90,29 @@ class PedestrianInvDistance(PedestrianGoal):
         return magnitude * direction
     
     def calcWallForce(self, wall):
-        return None
+        dx = wall[0][0] - wall[1][0]
+        dy = wall[0][1] - wall[1][1]
+        perpVec = np.array([dy, -dx])
+        end1 = wall[0] - self.pos
+        end2 = wall[1] - self.pos
+        sign1 = copysign(1, np.cross(perpVec, end1))
+        sign2 = copysign(1, np.cross(perpVec, end2))
+        force = np.array([0.0, 0.0])
+        if sign1 != sign2:
+            # The perpendicular from the wall to the pedestrian exists
+            # So, compute the perpendicular distance
+            pMag = np.sqrt(np.dot(perpVec, perpVec))
+            dist = np.dot(perpVec, end1) / pMag
+            force = -self.dist_const * perpVec / dist ** 3
+        else:
+            # Compute the closest wall end point,
+            # and treat it as a pedestrian of 0 radius
+            closest = wall[0]
+            if np.dot(end1, end1) > np.dot(end2, end2):
+                closest = wall[1]
+            ped = Pedestrian(closest)
+            force = self.calcPedForce(ped)
+        return force
     
     def pedType(self):
         return "Inverse Distance Pedestrian"
@@ -125,7 +125,7 @@ class PedestrianTTC(PedestrianGoal):
     def __init__(self, **kwds):
         super().__init__(**kwds)
     
-    def calcTimeToCollision(self, other):
+    def calcPedTimeToCollision(self, other):
         dv = other.vel - self.vel
         dvMag = np.sqrt(np.dot(dv, dv))
         dp = other.pos - self.pos
@@ -140,13 +140,58 @@ class PedestrianTTC(PedestrianGoal):
             ttc = (b - np.sqrt(d)) / a
             return ttc
     
+    def calcWallTimeToCollision(self, wall):
+        # Use law of sines to compute the distance to the wall
+        end1 = wall[0] - self.pos
+        end2 = wall[1] - self.pos
+        dw = wall[0] - wall[1]
+        dwMag = np.sqrt(np.dot(dw, dw))
+        end1Mag = np.sqrt(np.dot(end1, end1))
+        phi = np.arccos(np.dot(dw, end1) / dwMag / end1Mag)
+        velMag = np.sqrt(np.dot(self.vel, self.vel))
+        theta = np.arccos(np.dot(self.vel, end1) / velMag / end1Mag)
+        gamma = np.pi - theta - phi
+        centralDist = np.sin(phi) * end1Mag / np.sin(gamma)
+        # Now find the distance to the actual intersection
+        radialDist = centralDist - self.radius / np.sin(gamma)
+        # Verify that this occurs where a
+        # perpendicular to the wall exists
+        intersectPos = self.pos + self.vel / velMag * radialDist
+        perpDir = np.array([dw[1], -dw[0]])
+        interEnd1 = wall[0] - intersectPos
+        interEnd2 = wall[1] - intersectPos
+        sign1 = copysign(1, np.cross(interEnd1, perpDir))
+        sign2 = copysign(1, np.cross(interEnd2, perpDir))
+        ttc = float('inf')
+        if sign1 == sign2:
+            # The perpendicular does not exist,
+            # so compute the TTC for both of the end points
+            # Choose the smaller one, as that will be the TTC
+            # for the wall
+            ped1 = Pedestrian(pos = wall[0])
+            t1 = self.calcPedTimeToCollision(ped1)
+            ped2 = Pedestrian(pos = wall[1])
+            t2 = self.calcPedTimeToCollision(ped2)
+            times = sorted([t1, t2])
+            if times[0] > 0:
+                ttc = times[0]
+            elif times[1] > 0:
+                ttc = times[1]
+            else:
+                ttc = float('inf')
+        else:
+            # The perpendicular does exist,
+            # so just compute the time to this position
+            ttc = radialDist / vel.mag
+        return ttc
+    
     def calcEnergy(self, other):
         ttc = self.calcTimeToCollision(other)
         e = self.k_const * exp(-ttc / self.tau0) / ttc ** 2
         return e
     
     def calcPedForce(self, other):
-        ttc = self.calcTimeToCollision(other)
+        ttc = self.calcPedTimeToCollision(other)
         if isinf(ttc) or ttc < 0:
             return np.array([0.0, 0.0])
         dp = other.pos - self.pos
@@ -160,6 +205,10 @@ class PedestrianTTC(PedestrianGoal):
         fterm3num = (dvMag ** 2) * dp - dpdv * dv
         fterm3den = dpdv ** 2 - (dvMag ** 2) * (dpMag ** 2 - totalRad ** 2)
         force = -fterm1 * fterm2 * (dv - fterm3num / np.sqrt(fterm3den))
+        return force
+    
+    def calcWallForce(self, wall):
+        force = np.array([0.0, 0.0])
         return force
     
     def pedType(self):
