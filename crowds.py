@@ -35,7 +35,7 @@ class CrowdSim:
             p = PedestrianInvDistance(pos = [xPed, yPed],
                                       radius = pedRadius,
                                       goal = goal,
-                                      dist_const = 0.01,
+                                      dist_const = 0.1,
                                       maxVelMag = maxVelMag,
                                       color = color)
             self.pedestrians.append(p)

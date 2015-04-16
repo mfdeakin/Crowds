@@ -9,6 +9,7 @@ class Pedestrian:
     
     def __init__(self, pos, vel = np.array([0, 0]),
                  radius = 1.0, **kwds):
+        print(kwds)
         super().__init__(**kwds)
         self.pos = np.array(pos)
         self.vel = np.array(vel)
@@ -84,7 +85,7 @@ class PedestrianInvDistance(PedestrianGoal):
         super().__init__(**kwds)
     
     def calcPedForce(self, other):
-        dp = self.pos - other.pos
+        dp = self.pos - other.pos - self.radius - other.radius
         magnitude = self.dist_const / np.dot(dp, dp)
         direction = dp * np.sqrt(magnitude)
         return magnitude * direction
@@ -224,14 +225,16 @@ class PedestrianDS(PedestrianGoal):
     
     def calcPedForce(self, other):
         dp = self.pos - other.pos
-        dpMag = np.sqrt(np.dot(dp, dp))
-        if dpMag > safeDist:
+        dpMag = np.sqrt(np.dot(dp, dp)) - \
+                self.radius - other.radius
+        if dpMag > self.safeDist:
             return 0
         dv = self.vel - other.vel
         dpDir = dp / dpMag
         compSpeed = np.dot(dv, dpDir)
-        compression = safeDist - dpMag
-        force = (springConst * compression - dampConst * compSpeed) * dpDir
+        compression = self.safeDist - dpMag
+        force = (self.springConst * compression - \
+                 self.dampConst * compSpeed) * dpDir
         return force
     
     def pedType(self):
