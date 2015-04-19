@@ -158,7 +158,7 @@ class PedestrianTTC(PedestrianGoal):
         # not the other way around
         if np.dot(end1, wallPerp) < 0:
             wallPerp = -wallPerp
-        perpDist = np.dot(end1, perpDist)
+        perpDist = np.dot(end1, wallPerp)
         ttc = (perpDist - self.radius) / \
               abs(np.dot(wallPerp, self.vel))
         # collisionPos gives the position of the collision
