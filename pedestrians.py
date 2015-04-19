@@ -9,7 +9,6 @@ class Pedestrian:
     
     def __init__(self, pos, vel = np.array([0, 0]),
                  radius = 1.0, **kwds):
-        print(kwds)
         super().__init__(**kwds)
         self.pos = np.array(pos)
         self.vel = np.array(vel)
@@ -37,10 +36,15 @@ class Pedestrian:
         return "Static Pedestrian"
 
 class PedestrianGoal(Pedestrian):
-    def __init__(self, goal, color, maxVelMag = 0.1, **kwds):
+    def __init__(self, goal, color, wallCoeff = 0.01,
+                 pedCoeff = 0.8, goalCoeff = 1,
+                 maxVelMag = 0.1, **kwds):
         super().__init__(**kwds)
         self.goal = goal
         self.maxVelMag = maxVelMag
+        self.wallCoeff = wallCoeff
+        self.pedCoeff = pedCoeff
+        self.goalCoeff = goalCoeff
         self.color = color
 
     def __repr__(self):
@@ -56,11 +60,11 @@ class PedestrianGoal(Pedestrian):
     def calcForces(self, others, walls):
         force = np.array([0.0, 0.0])
         for p in others:
-            force += self.calcPedForce(p)
+            force += self.calcPedForce(p) * self.pedCoeff
         for w in walls:
-            force += self.calcWallForce(w)
+            force += self.calcWallForce(w) * self.wallCoeff
         force += self.velForce()
-        force += self.goal.calcForceToPed(self)
+        force += self.goal.calcForceToPed(self) * self.goalCoeff
         return force
     
     def update(self, others, walls, dt = 0.1):
@@ -142,33 +146,34 @@ class PedestrianTTC(PedestrianGoal):
             return ttc
     
     def calcWallTimeToCollision(self, wall):
-        # Use law of sines to compute the distance to the wall
+        if np.dot(self.vel, self.vel) == 0:
+            return float('inf')
+        # Compute the time to collision of an infinitely long wall
         end1 = wall[0] - self.pos
-        end2 = wall[1] - self.pos
-        dw = wall[0] - wall[1]
-        dwMag = np.sqrt(np.dot(dw, dw))
-        end1Mag = np.sqrt(np.dot(end1, end1))
-        phi = np.arccos(np.dot(dw, end1) / dwMag / end1Mag)
-        velMag = np.sqrt(np.dot(self.vel, self.vel))
-        theta = np.arccos(np.dot(self.vel, end1) / velMag / end1Mag)
-        gamma = np.pi - theta - phi
-        centralDist = np.sin(phi) * end1Mag / np.sin(gamma)
-        # Now find the distance to the actual intersection
-        radialDist = centralDist - self.radius / np.sin(gamma)
-        # Verify that this occurs where a
-        # perpendicular to the wall exists
-        intersectPos = self.pos + self.vel / velMag * radialDist
-        perpDir = np.array([dw[1], -dw[0]])
-        interEnd1 = wall[0] - intersectPos
-        interEnd2 = wall[1] - intersectPos
-        sign1 = copysign(1, np.cross(interEnd1, perpDir))
-        sign2 = copysign(1, np.cross(interEnd2, perpDir))
-        ttc = float('inf')
-        if sign1 == sign2:
-            # The perpendicular does not exist,
-            # so compute the TTC for both of the end points
-            # Choose the smaller one, as that will be the TTC
-            # for the wall
+        wallVec = wall[1] - wall[0]
+        wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
+        perpDist = np.sqrt(np.dot(end1, end1) - \
+                           np.dot(end1, wallDir) ** 2)
+        wallPerp = np.array([wallDir[1], -wallDir[0]])
+        # Perpendiculars are unsigned, but computations are not
+        # It should point from the pedestrian to the wall,
+        # not the other way around
+        if np.dot(end1, wallPerp) < 0:
+            wallPerp = -wallPerp
+        ttc = (perpDist - self.radius) / \
+              abs(np.dot(wallPerp, self.vel))
+        # collisionPos gives the position of the collision
+        # relative to one of the ends of the wall
+        collisionPos = ttc * self.vel + self.radius * wallPerp - end1
+        collisionProd = np.dot(collisionPos, wallVec)
+        wallLen = np.dot(wallVec, wallVec)
+        # This tells us if the collision occurs or not
+        # If this is larger than the length squared of the wall,
+        # it's not a collision
+        # If this is less than 0, it's not a collision
+        if collisionProd > wallLen or collisionProd < 0:
+            # No collision here,
+            # so if one occurs it's at one of the ends
             ped1 = Pedestrian(pos = wall[0])
             t1 = self.calcPedTimeToCollision(ped1)
             ped2 = Pedestrian(pos = wall[1])
@@ -179,15 +184,24 @@ class PedestrianTTC(PedestrianGoal):
             elif times[1] > 0:
                 ttc = times[1]
             else:
+                # No collision with the ends of the wall
                 ttc = float('inf')
-        else:
-            # The perpendicular does exist,
-            # so just compute the time to this position
-            ttc = radialDist / vel.mag
         return ttc
     
+    def calcWallTTCGrad(self, wall):
+        end1 = wall[0] - self.pos
+        wallVec = wall[1] - wall[0]
+        wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
+        wallPerp = np.array([-wallDir[1], wallDir[0]])
+        coeff = 1 / np.sqrt(np.dot(end1, end1) - \
+                            np.dot(wallDir, end1) ** 2) / \
+            abs(np.dot(self.vel, wallPerp))
+        mtx = np.array([[wallDir[1], -wallDir[0] * wallDir[1]],
+                        [-wallDir[0] * wallDir[1], wallDir[0]]])
+        return -np.dot(mtx, end1) * coeff
+    
     def calcEnergy(self, other):
-        ttc = self.calcTimeToCollision(other)
+        ttc = self.calcPedTimeToCollision(other)
         e = self.k_const * exp(-ttc / self.tau0) / ttc ** 2
         return e
     
@@ -209,7 +223,13 @@ class PedestrianTTC(PedestrianGoal):
         return force
     
     def calcWallForce(self, wall):
-        force = np.array([0.0, 0.0])
+        ttc = self.calcWallTimeToCollision(wall)
+        if isinf(ttc) or ttc < 0:
+            return np.array([0.0, 0.0])
+        ttcGrad = self.calcWallTTCGrad(wall)
+        fterm1 = -self.k_const * exp(-ttc / self.tau0) / (ttc ** 2)
+        fterm2 = 2 / ttc + 1 / self.tau0
+        force = fterm1 * fterm2 * ttcGrad
         return force
     
     def pedType(self):

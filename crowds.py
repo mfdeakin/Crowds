@@ -14,6 +14,7 @@ class CrowdSim:
     def __init__(self, numPedestrians = 3,
                  pedRadius = 0.05,
                  maxVelMag = 0.1,
+                 numWallsMax = 0,
                  areaDim = np.array([1.0, 1.0])):
         self.pedestrians = []
         self.walls = []
@@ -30,21 +31,30 @@ class CrowdSim:
                    pedRadius
             yPed = random.random() * (areaDim[1] - 2 * pedRadius) + \
                    pedRadius
-            print(xPed, yPed, pedRadius)
             color = colors[i % numPedestrians]
-            p = PedestrianInvDistance(pos = [xPed, yPed],
-                                      radius = pedRadius,
-                                      goal = goal,
-                                      dist_const = 0.1,
-                                      maxVelMag = maxVelMag,
-                                      color = color)
+            p = PedestrianTTC(pos = [xPed, yPed],
+                              radius = pedRadius,
+                              goal = goal,
+                              maxVelMag = maxVelMag,
+                              color = color)
             self.pedestrians.append(p)
         for c1 in [np.array([0.0, 0.0]),
                    np.array([areaDim[0], areaDim[1]])]:
             for c2 in [np.array([areaDim[0], 0.0]),
                        np.array([0.0, areaDim[1]])]:
                 self.walls.append((c1, c2))
-        print(self.walls)
+        numWalls = int(numWallsMax * random.random())
+        for i in range(numWalls):
+            x1 = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                 pedRadius
+            x2 = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                 pedRadius
+            y1 = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                 pedRadius
+            y2 = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                 pedRadius
+            wall = (np.array([x1, y1]), (np.array([x2, y2])))
+            self.walls.append(wall)
     
     def __repr__(self):
         strout = "Number of Pedestrians: " + \
@@ -80,30 +90,35 @@ class CrowdSim:
             p = self.pedestrians[i]
             # Draw the pedestrian's velocity
             xBounds = [p.pos[0] * width,
-                       (p.pos[0] + p.vel[0]) * width]
+                       max((p.pos[0] + p.vel[0]) * width, 0)]
             yBounds = [p.pos[1] * height,
-                       (p.pos[1] + p.vel[1]) * height]
-            aBounds = tuple(zip(xBounds, yBounds))
-            draw.line(aBounds, width = 1)
+                       max((p.pos[1] + p.vel[1]) * height, 0)]
+            if not (isinf(np.dot(xBounds, xBounds)) or
+                    isinf(np.dot(yBounds, yBounds))):
+                aBounds = tuple(zip(xBounds, yBounds))
+                draw.line(aBounds, width = 1)
             
             # Draw the force from the goal
             gForce = p.goal.calcForceToPed(p)
             xBounds = [p.pos[0] * width,
-                       (p.pos[0] + gForce[0]) * width]
+                       max((p.pos[0] + gForce[0]) * width, 0)]
             yBounds = [p.pos[1] * height,
-                       (p.pos[1] + gForce[1]) * height]
-            gfBounds = tuple(zip(xBounds, yBounds))
-            draw.line(gfBounds, fill = p.color, width = 4)
+                       max((p.pos[1] + gForce[1]) * height, 0)]
+            if not (isinf(np.dot(xBounds, xBounds)) or
+                    isinf(np.dot(yBounds, yBounds))):
+                gfBounds = tuple(zip(xBounds, yBounds))
+                draw.line(gfBounds, fill = p.color, width = 4)
             
             # Draw the total force acting on the pedestrian
             otherPeds = self.pedestrians[:i] + self.pedestrians[i + 1:]
             force = p.calcForces(otherPeds, self.walls)
             xBounds = [p.pos[0] * width,
-                       (p.pos[0] + force[0]) * width]
+                       max((p.pos[0] + force[0]) * width, 0)]
             yBounds = [p.pos[1] * height,
-                       (p.pos[1] + force[1]) * height]
-            fBounds = tuple(zip(xBounds, yBounds))
-            draw.line(fBounds, width = 2)
+                       max((p.pos[1] + force[1]) * height, 0)]
+            if not isinf(np.dot(force, force)):
+                fBounds = tuple(zip(xBounds, yBounds))
+                draw.line(fBounds, width = 2)
         
         scaling = [width, height]
         for w in self.walls:
@@ -138,5 +153,4 @@ if __name__ == "__main__":
         fname = "Frame_" + format(frame, "03") + ".png"
         frame += 1
         im.save(fname)
-        print(c)
-    
+        print(fname)
