@@ -15,12 +15,13 @@ class Goal:
     def __str__(self):
         return self.__repr__()
     
-    def goalType(self):
-        return "Constant Force"
+    @staticmethod
+    def goalType():
+        return "CForce"
     
     def calcForceToPed(self, ped):
-        disp = ped.self.pos - pos
-        forceDir = disp / np.sqrt(np.dot(disp, disp))
+        disp = ped.pos - self.pos
+        forceDir = -disp / np.sqrt(np.dot(disp, disp))
         force = forceDir * self.force
         return force
 
@@ -28,8 +29,9 @@ class DistanceGoal(Goal):
     def __init__(self, **kwds):
         super().__init__(**kwds)
     
-    def goalType(self):
-        return "Distance Force"
+    @staticmethod
+    def goalType():
+        return "DForce"
     
     def calcForceToPed(self, ped):
         disp = self.pos - ped.pos
@@ -42,8 +44,9 @@ class TimeToGoal(Goal):
         self.timeCoeff = timeCoeff
         super().__init__(**kwds)
     
-    def goalType(self):
-        return "Time To Goal Force"
+    @staticmethod
+    def goalType():
+        return "TTGForce"
     
     def calcTimeToMinDist(self, ped):
         dv = ped.vel

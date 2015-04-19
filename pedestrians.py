@@ -32,12 +32,41 @@ class Pedestrian:
     def update(self, others, walls, dt = 0.1):
         return np.array([0.0, 0.0])
     
+    def intersectingPed(self, other):
+        disp = self.pos - other.pos
+        dist = np.dot(disp, disp)
+        totalRad = (self.radius + other.radius) ** 2
+        return totalRad > dist
+    
+    def intersectingWall(self, wall):
+        wallVec = wall[0] - wall[1]
+        wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
+        wallPerp = np.array([-wallDir[1], wallDir[0]])
+        end1 = wall[0] - self.pos
+        if abs(np.dot(wallPerp, end1)) < self.radius:
+            # Possible collision, check if the
+            # perpendicular intersects the wall
+            end2 = wall[1] - self.pos
+            sign1 = copysign(1, np.cross(end1, wallPerp))
+            sign2 = copysign(1, np.cross(end2, wallPerp))
+            if sign1 == sign2:
+                # The perpendicular doesn't exist,
+                # though there's the possibility
+                # it's still intersecting at an end
+                if np.dot(end1, end1) < self.radius ** 2 or \
+                   np.dot(end2, end2) < self.radius ** 2:
+                    return True
+            else:
+                return True
+        return False
+    
+    @staticmethod
     def pedType(self):
-        return "Static Pedestrian"
+        return "SPed"
 
 class PedestrianGoal(Pedestrian):
     def __init__(self, goal, color, wallCoeff = 0.01,
-                 pedCoeff = 0.8, goalCoeff = 1,
+                 pedCoeff = 1.0, goalCoeff = 1,
                  maxVelMag = 0.1, **kwds):
         super().__init__(**kwds)
         self.goal = goal
@@ -67,6 +96,11 @@ class PedestrianGoal(Pedestrian):
         force += self.goal.calcForceToPed(self) * self.goalCoeff
         return force
     
+    def goalReached(self):
+        disp = self.pos - self.goal.pos
+        dist = np.dot(disp, disp)
+        return dist < self.radius ** 2
+    
     def update(self, others, walls, dt = 0.1):
         force = self.calcForces(others, walls)
         dv = force * dt
@@ -95,32 +129,35 @@ class PedestrianInvDistance(PedestrianGoal):
         return magnitude * direction
     
     def calcWallForce(self, wall):
-        dx = wall[0][0] - wall[1][0]
-        dy = wall[0][1] - wall[1][1]
-        perpVec = np.array([dy, -dx])
+        wallVec = wall[0] - wall[1]
+        wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
+        wallPerp = np.array([-wallDir[1], wallDir[0]])
         end1 = wall[0] - self.pos
         end2 = wall[1] - self.pos
-        sign1 = copysign(1, np.cross(perpVec, end1))
-        sign2 = copysign(1, np.cross(perpVec, end2))
+        # Make certain the wall is always in the direction of wallPerp
+        if np.dot(wallPerp, end1) < 0:
+            wallPerp = -wallPerp
+        sign1 = copysign(1, np.cross(wallPerp, end1))
+        sign2 = copysign(1, np.cross(wallPerp, end2))
         force = np.array([0.0, 0.0])
         if sign1 != sign2:
             # The perpendicular from the wall to the pedestrian exists
-            # So, compute the perpendicular distance
-            pMag = np.sqrt(np.dot(perpVec, perpVec))
-            dist = np.dot(perpVec, end1) / pMag
-            force = -self.dist_const * perpVec / dist ** 3
+            # So compute the perpendicular distance and force
+            dist = np.dot(wallPerp, end1)
+            force = -self.dist_const * wallPerp / dist ** 2
         else:
             # Compute the closest wall end point,
             # and treat it as a pedestrian of 0 radius
             closest = wall[0]
             if np.dot(end1, end1) > np.dot(end2, end2):
                 closest = wall[1]
-            ped = Pedestrian(closest)
+            ped = Pedestrian(pos = closest, radius = 0)
             force = self.calcPedForce(ped)
         return force
     
-    def pedType(self):
-        return "Inverse Distance Pedestrian"
+    @staticmethod
+    def pedType():
+        return "IDPed"
 
 class PedestrianTTC(PedestrianGoal):
     """A pedestrian based off of the time to collision model"""
@@ -231,14 +268,15 @@ class PedestrianTTC(PedestrianGoal):
         force = fterm1 * fterm2 * ttcGrad
         return force
     
-    def pedType(self):
-        return "Time To Collision Pedestrian"
+    @staticmethod
+    def pedType():
+        return "TTCPed"
 
 class PedestrianDS(PedestrianGoal):
     def __init__(self, safeDist = 0.2, springConst = 1,
                  dampConst = 1, **kwds):
         super().__init__(**kwds)
-        self.safeDist = safeDist
+        self.safeDist = 2 * self.radius
         self.springConst = springConst
         self.dampConst = dampConst
     
@@ -273,8 +311,9 @@ class PedestrianDS(PedestrianGoal):
         xForce = -abs(self.springConst * (end2Dist - end1Dist) * \
                       xVel * perpDist)
         yForce = (end2Dist ** 2 - end1Dist ** 2) * xVel / 2
-        force = xForce * wallDir + yForce * wallPerp
+        force = -xForce * wallPerp + yForce * wallDir
         return force
     
-    def pedType(self):
-        return "Damped Spring Pedestrian"
+    @staticmethod
+    def pedType():
+        return "DSPed"

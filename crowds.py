@@ -15,46 +15,81 @@ class CrowdSim:
                  pedRadius = 0.05,
                  maxVelMag = 0.1,
                  numWallsMax = 0,
-                 areaDim = np.array([1.0, 1.0])):
+                 areaDim = np.array([1.0, 1.0]),
+                 pedType = PedestrianTTC,
+                 pedParams = {},
+                 goalType = TimeToGoal,
+                 goalParams = {}):
         self.pedestrians = []
         self.walls = []
         self.wallDist = 0.001
         self.pedRadius = pedRadius
-        colors = ["#ff0000", "#00ff00", "#0000ff"]
-        for i in range(numPedestrians):
-            xGoal = random.random() * (areaDim[0] - 2 * pedRadius) + \
-                    pedRadius
-            yGoal = random.random() * (areaDim[1] - 2 * pedRadius) + \
-                    pedRadius
-            goal = TimeToGoal(pos = [xGoal, yGoal])
-            xPed = random.random() * (areaDim[0] - 2 * pedRadius) + \
-                   pedRadius
-            yPed = random.random() * (areaDim[1] - 2 * pedRadius) + \
-                   pedRadius
-            color = colors[i % numPedestrians]
-            p = PedestrianTTC(pos = [xPed, yPed],
-                              radius = pedRadius,
-                              goal = goal,
-                              maxVelMag = maxVelMag,
-                              color = color)
-            self.pedestrians.append(p)
-        for c1 in [np.array([0.0, 0.0]),
-                   np.array([areaDim[0], areaDim[1]])]:
-            for c2 in [np.array([areaDim[0], 0.0]),
-                       np.array([0.0, areaDim[1]])]:
-                self.walls.append((c1, c2))
-        numWalls = int(numWallsMax * random.random())
-        for i in range(numWalls):
-            x1 = random.random() * (areaDim[0] - 2 * pedRadius) + \
-                 pedRadius
-            x2 = random.random() * (areaDim[0] - 2 * pedRadius) + \
-                 pedRadius
-            y1 = random.random() * (areaDim[1] - 2 * pedRadius) + \
-                 pedRadius
-            y2 = random.random() * (areaDim[1] - 2 * pedRadius) + \
-                 pedRadius
-            wall = (np.array([x1, y1]), (np.array([x2, y2])))
-            self.walls.append(wall)
+        self.colors = ["#ff0000", "#00ff00", "#0000ff"]
+        self.maxVelMag = maxVelMag
+        validStart = False
+        self.time = 0
+        while validStart == False:
+            for i in range(numPedestrians):
+                xGoal = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                        pedRadius
+                yGoal = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                        pedRadius
+                goal = goalType(pos = [xGoal, yGoal], **goalParams)
+                xPed = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                       pedRadius
+                yPed = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                       pedRadius
+                color = self.colors[i % numPedestrians]
+                p = pedType(pos = [xPed, yPed],
+                            radius = pedRadius,
+                            goal = goal,
+                            maxVelMag = maxVelMag,
+                            color = color,
+                            **pedParams)
+                self.pedestrians.append(p)
+            # for c1 in [np.array([0.0, 0.0]),
+            #            np.array([areaDim[0], areaDim[1]])]:
+            #     for c2 in [np.array([areaDim[0], 0.0]),
+            #                np.array([0.0, areaDim[1]])]:
+            #         self.walls.append((c1, c2))
+            numWalls = int(numWallsMax * random.random())
+            numWalls = 1
+            for i in range(numWalls):
+                x1 = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                     pedRadius
+                x2 = random.random() * (areaDim[0] - 2 * pedRadius) + \
+                     pedRadius
+                y1 = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                     pedRadius
+                y2 = random.random() * (areaDim[1] - 2 * pedRadius) + \
+                     pedRadius
+                wall = (np.array([x1, y1]), (np.array([x2, y2])))
+                self.walls.append(wall)
+            validStart = True
+            for p in self.pedestrians:
+                for other in [o for o in self.pedestrians if o != p]:
+                    validStart &= not p.intersectingPed(other)
+                for w in self.walls:
+                    validStart &= not p.intersectingWall(w)
+        self.startingPoints = [p.pos for p in self.pedestrians]
+        self.goalPoints = [p.goal.pos for p in self.pedestrians]
+    
+    def newStart(self, pedType, pedParams, goalType, goalParams):
+        self.time = 0
+        self.pedestrians = []
+        for i in range(len(self.goalPoints)):
+            goalPos = self.goalPoints[i]
+            newGoal = goalType(pos = goalPos,
+                               **goalParams)
+            pedPos = self.startingPoints[i]
+            color = self.colors[i % len(self.goalPoints)]
+            newPed = pedType(pos = pedPos,
+                             radius = self.pedRadius,
+                             goal = newGoal,
+                             maxVelMag = self.maxVelMag,
+                             color = color,
+                             **pedParams)
+            self.pedestrians.append(newPed)
     
     def __repr__(self):
         strout = "Number of Pedestrians: " + \
@@ -109,6 +144,19 @@ class CrowdSim:
                 gfBounds = tuple(zip(xBounds, yBounds))
                 draw.line(gfBounds, fill = p.color, width = 4)
             
+            # Draw the force from the walls
+            wForce = np.array([0.0, 0.0])
+            for w in self.walls:
+                wForce += p.calcWallForce(w)
+            xBounds = [p.pos[0] * width,
+                       max((p.pos[0] + wForce[0]) * width, 0)]
+            yBounds = [p.pos[1] * height,
+                       max((p.pos[1] + wForce[1]) * height, 0)]
+            if not (isinf(np.dot(xBounds, xBounds)) or
+                    isinf(np.dot(yBounds, yBounds))):
+                wfBounds = tuple(zip(xBounds, yBounds))
+                draw.line(wfBounds, fill = "#aaaaaa", width = 8)
+            
             # Draw the total force acting on the pedestrian
             otherPeds = self.pedestrians[:i] + self.pedestrians[i + 1:]
             force = p.calcForces(otherPeds, self.walls)
@@ -129,9 +177,25 @@ class CrowdSim:
         return self
     
     def timestep(self):
-        for i in range(len(self.pedestrians)):
-            otherPeds = self.pedestrians[:i] + self.pedestrians[i + 1:]
-            self.pedestrians[i].update(otherPeds, self.walls)
+        self.time += 1
+        for p in self.pedestrians:
+            otherPeds = [o for o in self.pedestrians if o != p]
+            p.update(otherPeds, self.walls)
+            if p.goalReached():
+                self.pedestrians = [nonI for nonI in self.pedestrians
+                                    if nonI != p]
+                print("Pedestrian reached goal at " + str(self.time))
+        for p in self.pedestrians:
+            for other in [o for o in self.pedestrians if o != p]:
+                if p.intersectingPed(other):
+                    print("Pedestrian intersection, deleting")
+                    self.pedestrians = [nonI for nonI in self.pedestrians
+                                        if nonI != p and nonI != other]
+            for w in self.walls:
+                if p.intersectingWall(w):
+                    print("Wall intersection, deleting")
+                    self.pedestrians = [nonI for nonI in self.pedestrians
+                                        if nonI != p]
 
 def createImage(width, height):
     imBytes = np.zeros((width, height, 3))
@@ -146,11 +210,43 @@ if __name__ == "__main__":
     imWidth = 512
     imHeight = 512
     frame = 0
-    for t in np.linspace(0.0, 10.0, 101):
-        im = createImage(imWidth, imHeight)
-        c.renderScene(im, imWidth, imHeight)
-        c.timestep()
-        fname = "Frame_" + format(frame, "03") + ".png"
-        frame += 1
-        im.save(fname)
-        print(fname)
+    pedConfigs = [{'pedType': PedestrianTTC,
+                   'pedParams': {
+                       'wallCoeff': 0.05,
+                       'pedCoeff': 1.0,
+                       'goalCoeff': 1.0
+                   }},
+                  {'pedType': PedestrianInvDistance,
+                   'pedParams': {
+                       'wallCoeff': 0.1,
+                       'pedCoeff': 1.0,
+                       'goalCoeff': 1.0
+                       'dist_const': 2 * c.pedRadius
+                   }},
+                  {'pedType': PedestrianDS,
+                   'pedParams': {
+                       'wallCoeff': 0.1,
+                       'pedCoeff': 1.0,
+                       'goalCoeff': 1.0
+                   }}]
+    goalConfigs = [{'goalType': DistanceGoal,
+                    'goalParams': {}},
+                   {'goalType': TimeToGoal,
+                    'goalParams': {}},
+                   {'goalType': Goal,
+                    'goalParams': {}}]
+    for pedType in pedConfigs:
+        for goalType in goalConfigs:
+            params = pedType.copy()
+            params.update(goalType)
+            c.newStart(**params)
+            for t in np.linspace(0.0, 10.0, 101):
+                if len(c.pedestrians) > 0:
+                    im = createImage(imWidth, imHeight)
+                    c.renderScene(im, imWidth, imHeight)
+                    c.timestep()
+                    fname = pedType['pedType'].pedType() + "_" + \
+                            goalType['goalType'].goalType() + "_" + \
+                            format(c.time, "03") + ".png"
+                    im.save(fname)
+                    print(fname)
