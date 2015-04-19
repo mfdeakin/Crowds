@@ -46,7 +46,7 @@ class PedestrianGoal(Pedestrian):
         self.pedCoeff = pedCoeff
         self.goalCoeff = goalCoeff
         self.color = color
-
+    
     def __repr__(self):
         return super().__repr__() + \
             "\n" + str(self.goal)
@@ -152,14 +152,13 @@ class PedestrianTTC(PedestrianGoal):
         end1 = wall[0] - self.pos
         wallVec = wall[1] - wall[0]
         wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
-        perpDist = np.sqrt(np.dot(end1, end1) - \
-                           np.dot(end1, wallDir) ** 2)
         wallPerp = np.array([wallDir[1], -wallDir[0]])
         # Perpendiculars are unsigned, but computations are not
         # It should point from the pedestrian to the wall,
         # not the other way around
         if np.dot(end1, wallPerp) < 0:
             wallPerp = -wallPerp
+        perpDist = np.dot(end1, perpDist)
         ttc = (perpDist - self.radius) / \
               abs(np.dot(wallPerp, self.vel))
         # collisionPos gives the position of the collision
@@ -255,6 +254,26 @@ class PedestrianDS(PedestrianGoal):
         compression = self.safeDist - dpMag
         force = (self.springConst * compression - \
                  self.dampConst * compSpeed) * dpDir
+        return force
+    
+    def calcWallForce(self, wall):
+        end1 = wall[0] - self.pos
+        wallVec = wall[1] - wall[0]
+        wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
+        wallPerp = np.array([wallDir[1], -wallDir[0]])
+        if np.dot(end1, wallPerp) < 0:
+            wallPerp = -wallPerp
+        perpDist = np.dot(end1, wallPerp)
+        if perpDist > self.safeDist:
+            return np.array([0.0, 0.0])
+        end1Dist = abs(np.dot(wallDir, end1))
+        end2 = wall[1] - self.pos
+        end2Dist = abs(np.dot(wallDir, end2))
+        xVel = np.dot(self.vel, wallPerp)
+        xForce = -abs(self.springConst * (end2Dist - end1Dist) * \
+                      xVel * perpDist)
+        yForce = (end2Dist ** 2 - end1Dist ** 2) * xVel / 2
+        force = xForce * wallDir + yForce * wallPerp
         return force
     
     def pedType(self):
