@@ -220,7 +220,7 @@ if __name__ == "__main__":
                    'pedParams': {
                        'wallCoeff': 0.1,
                        'pedCoeff': 1.0,
-                       'goalCoeff': 1.0
+                       'goalCoeff': 1.0,
                        'dist_const': 2 * c.pedRadius
                    }},
                   {'pedType': PedestrianDS,
