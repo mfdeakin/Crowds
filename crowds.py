@@ -20,8 +20,6 @@ class CrowdSim:
                  pedParams = {},
                  goalType = TimeToGoal,
                  goalParams = {}):
-        self.pedestrians = []
-        self.walls = []
         self.wallDist = 0.001
         self.pedRadius = pedRadius
         self.colors = ["#ff0000", "#00ff00", "#0000ff"]
@@ -29,6 +27,8 @@ class CrowdSim:
         validStart = False
         self.time = 0
         while validStart == False:
+            self.pedestrians = []
+            self.walls = []
             for i in range(numPedestrians):
                 xGoal = random.random() * (areaDim[0] - 2 * pedRadius) + \
                         pedRadius

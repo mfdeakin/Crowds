@@ -1,0 +1,16 @@
+#!/bin/bash
+
+for i in `seq 1000`;
+    do mkdir "test${i}"
+    cd "test${i}"
+    while true;
+        do let numjobs=`jobs -r | wc -l`
+	if [ "${numjobs}" -lt "6" ]
+            then break
+	else
+	    sleep 1
+	fi
+    done
+    python3 ../crowds.py > testResults &
+    cd ..
+done

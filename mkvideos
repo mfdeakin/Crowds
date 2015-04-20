@@ -1,0 +1,10 @@
+#!/bin/bash
+
+avconv -i DSPed_CForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p DSPed_CForce.mp4
+avconv -i DSPed_DForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p DSPed_DForce.mp4
+avconv -i DSPed_TTGForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p DSPed_TTGForce.mp4
+avconv -i IDPed_CForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p IDPed_CForce.mp4
+avconv -i IDPed_TTGForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p IDPed_TTGForce.mp4
+avconv -i TTCPed_CForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p TTCPed_CForce.mp4
+avconv -i TTCPed_DForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p TTCPed_DForce.mp4
+avconv -i TTCPed_TTGForce_%03d.png -c:v libx264 -r 30 -pix_fmt yuv420p TTCPed_TTGForce.mp4
