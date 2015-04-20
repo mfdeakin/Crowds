@@ -230,11 +230,15 @@ if __name__ == "__main__":
                        'goalCoeff': 1.0
                    }}]
     goalConfigs = [{'goalType': DistanceGoal,
-                    'goalParams': {}},
+                    'goalParams': {
+                        'distCoeff': 1.0
+                    }},
                    {'goalType': TimeToGoal,
                     'goalParams': {}},
-                   {'goalType': Goal,
-                    'goalParams': {}}]
+                   {'goalType': ConstGoal,
+                    'goalParams': {
+                        'force': 0.1
+                    }}]
     for pedType in pedConfigs:
         for goalType in goalConfigs:
             params = pedType.copy()
