@@ -186,18 +186,38 @@ class PedestrianTTC(PedestrianGoal):
         if np.dot(self.vel, self.vel) == 0:
             return float('inf')
         # Compute the time to collision of an infinitely long wall
-        end1 = wall[0] - self.pos
         wallVec = wall[1] - wall[0]
         wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
         wallPerp = np.array([wallDir[1], -wallDir[0]])
         # Perpendiculars are unsigned, but computations are not
         # It should point from the pedestrian to the wall,
         # not the other way around
+        end1 = wall[0] - self.pos
         if np.dot(end1, wallPerp) < 0:
             wallPerp = -wallPerp
         perpDist = np.dot(end1, wallPerp)
-        ttc = (perpDist - self.radius) / \
-              abs(np.dot(wallPerp, self.vel))
+        perpVel = abs(np.dot(wallPerp, self.vel))
+        if perpDist > 0:
+            if perpVel > 0:
+                ttc = (perpDist - self.radius) / \
+                      abs(np.dot(wallPerp, self.vel))
+            else:
+                ttc = float('inf')
+        else:
+            ttc = 0
+        return ttc
+    
+    def isWallCollision(self, ttc, wall):
+        # Determine if the perpendicular from the pedestrian
+        # at the future time is intersects the wall
+        wallVec = wall[1] - wall[0]
+        wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
+        wallPerp = np.array([wallDir[1], -wallDir[0]])
+        # Perpendiculars are unsigned, but computations are not
+        # It should point from the pedestrian to the wall
+        end1 = wall[0] - self.pos
+        if np.dot(end1, wallPerp) < 0:
+            wallPerp = -wallPerp
         # collisionPos gives the position of the collision
         # relative to one of the ends of the wall
         collisionPos = ttc * self.vel + self.radius * wallPerp - end1
@@ -208,65 +228,70 @@ class PedestrianTTC(PedestrianGoal):
         # it's not a collision
         # If this is less than 0, it's not a collision
         if collisionProd > wallLen or collisionProd < 0:
-            # No collision here,
-            # so if one occurs it's at one of the ends
-            ped1 = Pedestrian(pos = wall[0])
-            t1 = self.calcPedTimeToCollision(ped1)
-            ped2 = Pedestrian(pos = wall[1])
-            t2 = self.calcPedTimeToCollision(ped2)
-            times = sorted([t1, t2])
-            if times[0] > 0:
-                ttc = times[0]
-            elif times[1] > 0:
-                ttc = times[1]
-            else:
-                # No collision with the ends of the wall
-                ttc = float('inf')
-        return ttc
+            return False
+        else:
+            return True
     
     def calcWallTTCGrad(self, wall):
-        end1 = wall[0] - self.pos
         wallVec = wall[1] - wall[0]
         wallDir = wallVec / np.sqrt(np.dot(wallVec, wallVec))
         wallPerp = np.array([-wallDir[1], wallDir[0]])
-        coeff = 1 / np.sqrt(np.dot(end1, end1) - \
-                            np.dot(wallDir, end1) ** 2) / \
-            abs(np.dot(self.vel, wallPerp))
-        mtx = np.array([[wallDir[1], -wallDir[0] * wallDir[1]],
-                        [-wallDir[0] * wallDir[1], wallDir[0]]])
-        return -np.dot(mtx, end1) * coeff
+        end1 = wall[0] - self.pos
+        if np.dot(end1, wallPerp) < 0:
+            wallPerp = -wallPerp
+        perpVel = np.dot(self.vel, wallPerp)
+        if perpVel > 0:
+            return wallPerp / perpVel
+        else:
+            return np.array([0.0, 0.0])
     
     def calcEnergy(self, other):
         ttc = self.calcPedTimeToCollision(other)
         e = self.k_const * exp(-ttc / self.tau0) / ttc ** 2
         return e
     
-    def calcPedForce(self, other):
-        ttc = self.calcPedTimeToCollision(other)
-        if isinf(ttc) or ttc < 0:
-            return np.array([0.0, 0.0])
+    def calcPedTTCGrad(self, other):
         dp = other.pos - self.pos
         dv = other.vel - self.vel
-        dpMag = np.sqrt(np.dot(dp, dp))
-        dvMag = np.sqrt(np.dot(dv, dv))
-        dpdv = np.dot(dp, dv)
-        totalRad = self.radius + other.radius
-        fterm1 = -self.k_const * exp(-ttc / self.tau0) / ((dpMag * ttc)  ** 2)
+        dvMagSq = np.dot(dv, dv)
+        num = dvMagSq * dp - np.dot(dp, dv) * dv
+        dpMagSq = np.dot(dp, dp)
+        radsSq = (self.radius + other.radius) ** 2
+        den = np.dot(dp, dv) ** 2 - dvMagSq * (dpMagSq - radsSq)
+        if np.dot(num, num) == 0.0 or den <= 0.0:
+            return dv / dvMagSq
+        return (dv - num / np.sqrt(den)) / dvMagSq
+    
+    def calcPedForce(self, other):
+        ttc = self.calcPedTimeToCollision(other)
+        if isinf(ttc) or ttc <= 0:
+            return np.array([0.0, 0.0])
+        fterm1 = -self.k_const * exp(-ttc / self.tau0) / ttc ** 2
         fterm2 = 2 / ttc + 1 / self.tau0
-        fterm3num = (dvMag ** 2) * dp - dpdv * dv
-        fterm3den = dpdv ** 2 - (dvMag ** 2) * (dpMag ** 2 - totalRad ** 2)
-        force = -fterm1 * fterm2 * (dv - fterm3num / np.sqrt(fterm3den))
+        ttcGrad = self.calcPedTTCGrad(other)
+        force = -fterm1 * fterm2 * ttcGrad
         return force
     
     def calcWallForce(self, wall):
         ttc = self.calcWallTimeToCollision(wall)
-        if isinf(ttc) or ttc < 0:
+        if self.isWallCollision(ttc, wall):
+            ttcGrad = self.calcWallTTCGrad(wall)
+            fterm1 = -self.k_const * exp(-ttc / self.tau0) / (ttc ** 2)
+            fterm2 = 2 / ttc + 1 / self.tau0
+            force = fterm1 * fterm2 * ttcGrad
+            return force
+        else:
+            wpeds = [Pedestrian(pos = wall[0], radius = 0.0),
+                     Pedestrian(pos = wall[1], radius = 0.0)]
+            times = [self.calcPedTimeToCollision(ped) for ped in wpeds]
+            if times[0] > 0 and not isinf(times[0]):
+                if times[0] < times[1] or times[1] < 0:
+                    return self.calcPedForce(wpeds[0])
+            if times[1] > 0 and not isinf(times[1]):
+                if times[1] < times[0] or times[0] < 0:
+                    return self.calcPedForce(wpeds[1])
+            # No collision with the ends of the wall
             return np.array([0.0, 0.0])
-        ttcGrad = self.calcWallTTCGrad(wall)
-        fterm1 = -self.k_const * exp(-ttc / self.tau0) / (ttc ** 2)
-        fterm2 = 2 / ttc + 1 / self.tau0
-        force = fterm1 * fterm2 * ttcGrad
-        return force
     
     @staticmethod
     def pedType():

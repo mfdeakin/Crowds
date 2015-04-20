@@ -2,22 +2,29 @@
 import numpy as np
 
 class Goal:
-    def __init__(self, pos, forceCoeff = 1.0, **kwds):
+    def __init__(self, pos, **kwds):
         super().__init__(**kwds)
         self.pos = np.array(pos)
-        self.force = forceCoeff
     
     def __repr__(self):
         return "Goal Type: " + self.goalType() + "\n" + \
-            "Position: " + str(self.pos) + "\n" + \
-            "Force Coefficient: " + str(self.force)
+            "Position: " + str(self.pos) + "\n"
     
     def __str__(self):
         return self.__repr__()
     
     @staticmethod
     def goalType():
-        return "CForce"
+        return "NoForce"
+
+class ConstGoal(Goal):
+    def __init__(self, force, **kwds):
+        super().__init__(**kwds)
+        self.force = force
+    
+    @staticmethod
+    def goalType():
+        return "ConstForce"
     
     def calcForceToPed(self, ped):
         disp = ped.pos - self.pos
@@ -26,16 +33,17 @@ class Goal:
         return force
 
 class DistanceGoal(Goal):
-    def __init__(self, **kwds):
+    def __init__(self, distCoeff = 1.0, **kwds):
         super().__init__(**kwds)
+        self.distCoeff = distCoeff
     
     @staticmethod
     def goalType():
-        return "DForce"
+        return "DistForce"
     
     def calcForceToPed(self, ped):
         disp = self.pos - ped.pos
-        force = disp * self.force
+        force = disp * self.distCoeff
         return force
 
 class TimeToGoal(Goal):
@@ -46,7 +54,7 @@ class TimeToGoal(Goal):
     
     @staticmethod
     def goalType():
-        return "TTGForce"
+        return "TimeForce"
     
     def calcTimeToMinDist(self, ped):
         dv = ped.vel
@@ -75,4 +83,3 @@ class TimeToGoal(Goal):
             self.timeCoeff * minDistTime
         force = dpDir * f
         return force
-
