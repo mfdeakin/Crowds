@@ -212,20 +212,20 @@ if __name__ == "__main__":
     frame = 0
     pedConfigs = [{'pedType': PedestrianTTC,
                    'pedParams': {
-                       'wallCoeff': 0.05,
+                       'wallCoeff': 0.01,
                        'pedCoeff': 1.0,
                        'goalCoeff': 1.0
                    }},
                   {'pedType': PedestrianInvDistance,
                    'pedParams': {
-                       'wallCoeff': 0.1,
+                       'wallCoeff': 0.01,
                        'pedCoeff': 1.0,
                        'goalCoeff': 1.0,
                        'dist_const': 2 * c.pedRadius
                    }},
                   {'pedType': PedestrianDS,
                    'pedParams': {
-                       'wallCoeff': 0.1,
+                       'wallCoeff': 1.0,
                        'pedCoeff': 1.0,
                        'goalCoeff': 1.0
                    }}]

@@ -1,16 +1,30 @@
 #!/bin/bash
 
-for i in `seq 1000`;
+let maxjobs="6"
+let videojob="0"
+let numtests="1000"
+let startvideos="0"
+
+for i in `seq ${numtests}`;
     do mkdir "test${i}"
     cd "test${i}"
     while true;
         do let numjobs=`jobs -r | wc -l`
-	if [ "${numjobs}" -lt "6" ]
+        if [ "${numjobs}" -lt "${maxjobs}" ]
             then break
 	else
+	    let startvideos="1"
 	    sleep 1
 	fi
     done
-    python3 ../crowds.py > testResults &
+    echo "Running Test ${i}"
+    python3 ../crowds.py > testResults 2>> testErrors &
     cd ..
+    if [ "${startvideos}" -eq "1" ]
+	then let videojob="${videojob}+1"
+	cd "test${videojob}"
+	echo "Creating Videos of Test ${videojob}"
+	sh ../mkvideos > /dev/null &
+	cd ..
+    fi
 done
