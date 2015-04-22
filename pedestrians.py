@@ -301,7 +301,7 @@ class PedestrianDS(PedestrianGoal):
     def __init__(self, safeDist = 0.2, springConst = 1,
                  dampConst = 1, **kwds):
         super().__init__(**kwds)
-        self.safeDist = 2 * self.radius
+        self.safeDist = safeDist
         self.springConst = springConst
         self.dampConst = dampConst
     
@@ -312,7 +312,7 @@ class PedestrianDS(PedestrianGoal):
         if dpMag > self.safeDist:
             return 0
         dv = self.vel - other.vel
-        dpDir = dp / dpMag
+        dpDir = dp / (dpMag + self.radius + other.radius)
         compSpeed = np.dot(dv, dpDir)
         compression = self.safeDist - dpMag
         force = (self.springConst * compression - \
@@ -326,17 +326,28 @@ class PedestrianDS(PedestrianGoal):
         wallPerp = np.array([wallDir[1], -wallDir[0]])
         if np.dot(end1, wallPerp) < 0:
             wallPerp = -wallPerp
-        perpDist = np.dot(end1, wallPerp)
+        perpDist = np.dot(end1, wallPerp) - self.radius
         if perpDist > self.safeDist:
             return np.array([0.0, 0.0])
-        end1Dist = abs(np.dot(wallDir, end1))
+        end1Dist = np.dot(wallDir, end1)
+        end1Sign = copysign(1, end1Dist)
         end2 = wall[1] - self.pos
-        end2Dist = abs(np.dot(wallDir, end2))
-        xVel = np.dot(self.vel, wallPerp)
-        xForce = -abs(self.springConst * (end2Dist - end1Dist) * \
-                      xVel * perpDist)
-        yForce = (end2Dist ** 2 - end1Dist ** 2) * xVel / 2
-        force = -xForce * wallPerp + yForce * wallDir
+        end2Dist = np.dot(wallDir, end2)
+        end2Sign = copysign(1, end2Dist)
+        if end1Sign != end2Sign:
+            xVel = np.dot(self.vel, wallPerp)
+            xForce = abs(self.springConst * (end2Dist - end1Dist) * \
+                         (self.safeDist - perpDist)) + self.dampConst * xVel
+            yForce = (end2Dist ** 2 - end1Dist ** 2) / 2
+            force = -xForce * wallPerp - yForce * wallDir
+        else:
+            pos = wall[0]
+            if end1Dist > end2Dist:
+                pos = wall[1]
+            wallPed = Pedestrian(pos = pos, radius = 0)
+            wallLen = abs(end2Dist - end1Dist)
+            force = self.calcPedForce(wallPed)
+            force *= wallLen
         return force
     
     @staticmethod

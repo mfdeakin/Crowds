@@ -2,7 +2,7 @@
 
 let maxjobs="6"
 let videojob="0"
-let numtests="1000"
+let numtests="50"
 let startvideos="0"
 
 for i in `seq ${numtests}`;
